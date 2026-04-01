@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+apps/server/.env
+apps/server/data
+apps/client/dist
+apps/server/dist

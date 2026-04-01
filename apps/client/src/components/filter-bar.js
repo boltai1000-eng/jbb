@@ -1,0 +1,13 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useQuery } from "@tanstack/react-query";
+import { Search, SlidersHorizontal, X } from "lucide-react";
+import { api } from "../lib/api";
+import { useFilters } from "./filters-context";
+export function FilterBar() {
+    const { filters, setFilters, clearFilters } = useFilters();
+    const { data } = useQuery({
+        queryKey: ["options"],
+        queryFn: api.options,
+    });
+    return (_jsxs("section", { className: "filters-panel", children: [_jsxs("div", { className: "input-with-icon", children: [_jsx(Search, { size: 16 }), _jsx("input", { placeholder: "Search customer, address, table...", value: filters.search || "", onChange: (event) => setFilters((prev) => ({ ...prev, search: event.target.value || undefined })) })] }), _jsxs("div", { className: "mini-grid", children: [_jsxs("label", { children: [_jsx("span", { children: "Date from" }), _jsx("input", { type: "date", value: filters.dateFrom || "", onChange: (event) => setFilters((prev) => ({ ...prev, dateFrom: event.target.value || undefined })) })] }), _jsxs("label", { children: [_jsx("span", { children: "Date to" }), _jsx("input", { type: "date", value: filters.dateTo || "", onChange: (event) => setFilters((prev) => ({ ...prev, dateTo: event.target.value || undefined })) })] }), _jsxs("label", { children: [_jsx("span", { children: "Seller" }), _jsxs("select", { value: filters.seller || "", onChange: (event) => setFilters((prev) => ({ ...prev, seller: event.target.value || undefined })), children: [_jsx("option", { value: "", children: "All sellers" }), data?.sellers.map((seller) => (_jsx("option", { value: seller, children: seller }, seller)))] })] }), _jsxs("label", { children: [_jsx("span", { children: "Table type" }), _jsxs("select", { value: filters.tableType || "", onChange: (event) => setFilters((prev) => ({ ...prev, tableType: event.target.value || undefined })), children: [_jsx("option", { value: "", children: "All types" }), data?.tableTypes.map((type) => (_jsx("option", { value: type, children: type }, type)))] })] }), _jsxs("label", { children: [_jsx("span", { children: "City" }), _jsxs("select", { value: filters.city || "", onChange: (event) => setFilters((prev) => ({ ...prev, city: event.target.value || undefined })), children: [_jsx("option", { value: "", children: "All cities" }), data?.cities.map((city) => (_jsx("option", { value: city, children: city }, city)))] })] })] }), _jsxs("div", { className: "filter-actions", children: [_jsxs("span", { className: "pill", children: [_jsx(SlidersHorizontal, { size: 14 }), "Shared filters"] }), _jsxs("button", { className: "secondary-button", onClick: clearFilters, children: [_jsx(X, { size: 14 }), "Reset"] })] })] }));
+}
