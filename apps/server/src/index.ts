@@ -43,13 +43,12 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   res.status(500).json({ message: "Internal server error" });
 });
 
-initializeDatabase()
-  .then(() => {
-    app.listen(env.port, () => {
-      console.log(`Server running on http://localhost:${env.port}`);
-    });
-  })
-  .catch((error) => {
-    console.error("Failed to initialize database", error);
-    process.exit(1);
+try {
+  initializeDatabase();
+  app.listen(env.port, () => {
+    console.log(`Server running on http://localhost:${env.port}`);
   });
+} catch (error) {
+  console.error("Failed to initialize database", error);
+  process.exit(1);
+}

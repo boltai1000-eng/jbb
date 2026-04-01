@@ -5,6 +5,7 @@ apps/server/.env
 apps/server/data
 apps/client/dist
 apps/server/dist
+backups
 apps/client/src/**/*.js
 apps/server/src/**/*.js
 apps/client/*.tsbuildinfo

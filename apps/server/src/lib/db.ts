@@ -1,88 +1,83 @@
+import fs from "node:fs";
+import path from "node:path";
+import Database from "better-sqlite3";
 import bcrypt from "bcryptjs";
-import { Pool } from "pg";
 import { env } from "./env.js";
 
-if (!env.databaseUrl) {
-  throw new Error("DATABASE_URL is required. Set it in apps/server/.env or Render.");
-}
+fs.mkdirSync(env.dataDir, { recursive: true });
 
-export const pool = new Pool({
-  connectionString: env.databaseUrl,
-  ssl: env.databaseUrl.includes("localhost")
-    ? false
-    : env.isProduction
-      ? { rejectUnauthorized: false }
-      : false,
-});
+export const db = new Database(path.join(env.dataDir, "jbb.db"));
+db.pragma("foreign_keys = ON");
 
-export async function initializeDatabase() {
-  await pool.query(`
+export function initializeDatabase() {
+  db.exec(`
     CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS sales (
-      id SERIAL PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       customer_name TEXT NOT NULL,
       seller TEXT NOT NULL,
-      sale_date DATE NOT NULL,
+      sale_date TEXT NOT NULL,
       address TEXT NOT NULL,
       city TEXT NOT NULL,
       state TEXT NOT NULL,
-      total_price NUMERIC(12, 2) NOT NULL,
-      latitude DOUBLE PRECISION,
-      longitude DOUBLE PRECISION,
+      total_price REAL NOT NULL,
+      latitude REAL,
+      longitude REAL,
       notes TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS sale_tables (
-      id SERIAL PRIMARY KEY,
-      sale_id INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_id INTEGER NOT NULL,
       table_name TEXT NOT NULL,
       type TEXT NOT NULL,
       size TEXT NOT NULL,
       quantity INTEGER NOT NULL,
-      unit_price NUMERIC(12, 2) NOT NULL,
-      features TEXT
+      unit_price REAL NOT NULL,
+      features TEXT,
+      FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS geocode_cache (
-      id SERIAL PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
       cache_key TEXT NOT NULL UNIQUE,
-      latitude DOUBLE PRECISION NOT NULL,
-      longitude DOUBLE PRECISION NOT NULL,
+      latitude REAL NOT NULL,
+      longitude REAL NOT NULL,
       formatted_address TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
-  await seedAdmin();
-  await seedSales();
+  seedAdmin();
+  seedSales();
 }
 
-async function seedAdmin() {
-  const existing = await pool.query(
-    "SELECT id FROM users WHERE email = $1",
-    ["admin@jbbtables.com"],
-  );
-  if (existing.rowCount) return;
+function seedAdmin() {
+  const existing = db
+    .prepare("SELECT id FROM users WHERE email = ?")
+    .get("admin@jbbtables.com");
+  if (existing) return;
 
   const hash = bcrypt.hashSync("admin123", 10);
-  await pool.query(
-    "INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3)",
-    ["JBB Admin", "admin@jbbtables.com", hash],
-  );
+  db.prepare(
+    "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+  ).run("JBB Admin", "admin@jbbtables.com", hash);
 }
 
-async function seedSales() {
-  const countResult = await pool.query("SELECT COUNT(*)::int AS count FROM sales");
-  if (countResult.rows[0]?.count > 0) return;
+function seedSales() {
+  const countResult = db.prepare("SELECT COUNT(*) AS count FROM sales").get() as {
+    count: number;
+  };
+  if (countResult.count > 0) return;
 
   const sales = [
     {
@@ -200,15 +195,14 @@ async function seedSales() {
   ];
 
   for (const sale of sales) {
-    const inserted = await pool.query(
+    const inserted = db.prepare(
       `
       INSERT INTO sales (
         customer_name, seller, sale_date, address, city, state, total_price,
         latitude, longitude, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
-      [
+    ).run(
         sale.customerName,
         sale.seller,
         sale.saleDate,
@@ -219,18 +213,17 @@ async function seedSales() {
         sale.latitude,
         sale.longitude,
         sale.notes,
-      ],
     );
 
-    const saleId = inserted.rows[0].id as number;
+    const saleId = Number(inserted.lastInsertRowid);
     for (const table of sale.tables) {
-      await pool.query(
+      db.prepare(
         `
         INSERT INTO sale_tables (
           sale_id, table_name, type, size, quantity, unit_price, features
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
-        [
+      ).run(
           saleId,
           table.tableName,
           table.type,
@@ -238,7 +231,6 @@ async function seedSales() {
           table.quantity,
           table.unitPrice,
           table.features,
-        ],
       );
     }
   }

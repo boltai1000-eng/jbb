@@ -1,4 +1,4 @@
-import { pool } from "../lib/db.js";
+import { db } from "../lib/db.js";
 import { env } from "../lib/env.js";
 
 type GeocodeResult = {
@@ -9,11 +9,11 @@ type GeocodeResult = {
 
 export async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
   const cacheKey = address.trim().toLowerCase();
-  const cachedResult = await pool.query(
-    "SELECT latitude, longitude, formatted_address FROM geocode_cache WHERE cache_key = $1",
-    [cacheKey],
-  );
-  const cached = cachedResult.rows[0] as
+  const cached = db
+    .prepare(
+      "SELECT latitude, longitude, formatted_address FROM geocode_cache WHERE cache_key = ?",
+    )
+    .get(cacheKey) as
     | { latitude: number; longitude: number; formatted_address: string }
     | undefined;
 
@@ -56,15 +56,9 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult | n
     formattedAddress: first.display_name,
   };
 
-  await pool.query(
-    `
-    INSERT INTO geocode_cache (cache_key, latitude, longitude, formatted_address)
-    VALUES ($1, $2, $3, $4)
-    ON CONFLICT (cache_key)
-    DO UPDATE SET latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude, formatted_address = EXCLUDED.formatted_address
-    `,
-    [cacheKey, result.latitude, result.longitude, result.formattedAddress],
-  );
+  db.prepare(
+    "INSERT OR REPLACE INTO geocode_cache (cache_key, latitude, longitude, formatted_address) VALUES (?, ?, ?, ?)",
+  ).run(cacheKey, result.latitude, result.longitude, result.formattedAddress);
 
   return result;
 }

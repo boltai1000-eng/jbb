@@ -2,7 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import { pool } from "../lib/db.js";
+import { db } from "../lib/db.js";
 import { env } from "../lib/env.js";
 
 const loginSchema = z.object({
@@ -11,38 +11,37 @@ const loginSchema = z.object({
 });
 
 export function registerAuthRoutes(app: Express) {
-  app.post("/api/auth/login", async (req, res, next) => {
+  app.post("/api/auth/login", (req, res, next) => {
     try {
-    const parsed = loginSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ message: "Invalid login payload" });
-    }
+      const parsed = loginSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid login payload" });
+      }
 
-    const userResult = await pool.query("SELECT * FROM users WHERE email = $1", [
-      parsed.data.email,
-    ]);
-    const user = userResult.rows[0] as
-      | { id: number; name: string; email: string; password_hash: string }
-      | undefined;
+      const user = db
+        .prepare("SELECT * FROM users WHERE email = ?")
+        .get(parsed.data.email) as
+        | { id: number; name: string; email: string; password_hash: string }
+        | undefined;
 
-    if (!user || !bcrypt.compareSync(parsed.data.password, user.password_hash)) {
-      return res.status(401).json({ message: "Incorrect email or password" });
-    }
+      if (!user || !bcrypt.compareSync(parsed.data.password, user.password_hash)) {
+        return res.status(401).json({ message: "Incorrect email or password" });
+      }
 
-    const token = jwt.sign(
-      { sub: user.id, name: user.name, email: user.email },
-      env.jwtSecret,
-      { expiresIn: "7d" },
-    );
+      const token = jwt.sign(
+        { sub: user.id, name: user.name, email: user.email },
+        env.jwtSecret,
+        { expiresIn: "7d" },
+      );
 
-    return res.json({
-      token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-      },
-    });
+      return res.json({
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+        },
+      });
     } catch (error) {
       next(error);
     }
